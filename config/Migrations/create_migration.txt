@@ -1,0 +1,27 @@
+## 以下はコマンドの履歴、このようなコマンドをッジッこうすることで Migrations が生成されます。
+## https://book.cakephp.org/3.0/ja/migrations.html
+
+# Item
+bin/cake bake migration CreateItems \
+  name:string[255] \
+  description:text? \
+  unit_price:integer \
+  sort_order:integer \
+  is_disable:boolean \
+  created \
+  modified
+
+# Order
+bin/cake bake migration CreateOrders \
+  order_date:date \
+  chatwork_id:integer \
+  created \
+  modified
+
+# OrderItem
+bin/cake bake migration CreateOrderItems \
+  order_id:integer \
+  item_id:integer \
+  number:integer \
+  created \
+  modified
