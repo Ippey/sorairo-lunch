@@ -17,7 +17,7 @@ class CreateOrders extends AbstractMigration
             'default' => null,
             'null' => false,
         ]);
-        $table->addColumn('chatwork_id', 'integer', [
+        $table->addColumn('chatwork_account', 'integer', [
             'default' => null,
             'limit' => 11,
             'null' => false,

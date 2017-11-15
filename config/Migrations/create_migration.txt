@@ -14,7 +14,7 @@ bin/cake bake migration CreateItems \
 # Order
 bin/cake bake migration CreateOrders \
   order_date:date \
-  chatwork_id:integer \
+  chatwork_account:integer \
   created \
   modified
 
