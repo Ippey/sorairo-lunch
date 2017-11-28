@@ -41,6 +41,7 @@ class OrdersTable extends Table
         $this->addBehavior('Timestamp');
 
         $this->hasMany('OrderItems', [
+        	'dependent' => true,
             'foreignKey' => 'order_id'
         ]);
     }

@@ -3,6 +3,8 @@ namespace App\ChatWork;
 
 // use PhpParser\Node\Scalar\String_;
 use \Cake\Http\ServerRequest;
+use Cake\Log\LogTrait;
+use Psr\Log\LogLevel;
 
 /**
  * ChatWork Webhook.
@@ -11,6 +13,8 @@ use \Cake\Http\ServerRequest;
  */
 class Webhook
 {
+
+	use LogTrait;
 	
 	/**
 	 * CHATWORK WEBHOOK TOKEN
@@ -57,6 +61,11 @@ class Webhook
     public function checkSignature(){
     	$decodeToken = base64_decode($this->webhookToken);
     	$hashed = base64_encode(hash_hmac('sha256', $this->rawBody, $decodeToken, true));
-    	return ($hashed == $this->signature);
+    	if ($hashed == $this->signature) {
+    		return true;
+    	} else {
+    		$this->log('Signature Check Error: Signature:' . $this->signature . ' vs Hashed:' . $hashed . "\n" . $webhook->rawBody, LogLevel::ERROR);
+    		return false;
+    	}
     }
 }
