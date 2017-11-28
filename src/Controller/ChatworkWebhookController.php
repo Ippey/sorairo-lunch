@@ -33,10 +33,10 @@ class ChatworkWebhookController extends AppController
     	$this->log('Hook Access: ', LogLevel::WARNING);
     	
     	// メニューを取得
-    	$query = $this->Items->find('ActiveMenu')->find('list');
+    	$query = $this->Items->find('ActiveMenu');// ->find('list');
     	$query->enableHydration(false); // 結果をArrayで
     	$menu = $query->toArray();
-    	
+
     	// シグネチャーをチェック
     	$webhook = new Webhook(env('CHATWORK_WEBHOOK_TOKEN'), $this->request);
     	if ( $webhook->checkSignature()) {
@@ -59,14 +59,21 @@ class ChatworkWebhookController extends AppController
     	// 「メニュー」で始まる：メニューを返す
     	// 「キャンセル」で始まる：$account_idの注文を取り消す
     	$roomId = env('CHATWORK_ROOM_ID');
-    	$message  = '[rp aid=' . $account_id. ' to=' . $roomId. '-' . $message_id. ']'; // [rp aid={account_id} to={room_id}-{message_id}]
+    	$message  = '';
+    	$message .= '[rp aid=' . $account_id. ' to=' . $roomId. '-' . $message_id. ']'; // [rp aid={account_id} to={room_id}-{message_id}]
+    	$message .= "[piconname:" . $account_id. "] さんへ";
+    	$message .= " 〜 おにぎりボットがお知らせします 8-)\n";
     	
     	if (preg_match('/^注文/', $text)) {
     		$message .= " ありがとうございます、下記の通り受け付けました。\n";
     		$message .= "$text";
     		
     	} elseif (preg_match('/^メニュー/', $text)) {
-    		$message .= " メニューだよ。\n";
+    		$message .= " メニューだよ。\n[code]";
+    		foreach ($menu as $item) {
+    			$message .= "　・" . $item['name'] . " (" . $item['unit_price'] . "円)\n";
+    		}
+    		$message .= "[/code]";
     		
     	} elseif (preg_match('/^キャンセル/', $text)) {
     		$message .= " キャンセルだよ。\n";
