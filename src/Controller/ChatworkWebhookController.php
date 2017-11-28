@@ -72,7 +72,8 @@ class ChatworkWebhookController extends AppController
     		$message .= " キャンセルだよ。\n";
     		
     	} else {
-    		// nothing to do.
+    		// not post Messages
+    		return;
     	}
     	
     	// CHATWORK APIでリプ
