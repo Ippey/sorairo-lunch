@@ -5,7 +5,6 @@ use App\ChatWork\Webhook;
 use App\ChatWork\Api;
 use Cake\ORM\TableRegistry;
 use Psr\Log\LogLevel;
-use PhpParser\Node\Stmt\TryCatch;
 
 /**
  * ChatworkWebhook Controller
@@ -38,6 +37,15 @@ class ChatworkWebhookController extends AppController
      */
     public function hook(){
     	$this->log('Hook Access: ', LogLevel::WARNING);
+
+    	// シグネチャーをチェック
+    	$webhook = new Webhook(env('CHATWORK_WEBHOOK_TOKEN'), $this->request);
+    	if ( $webhook->checkSignature()) {
+    		echo "Check OK.\n";
+    	} else {
+    		echo "Check NG.\n";
+    		return;
+    	}
     	
     	// メニューを取得
     	$query = $this->Items->find('ActiveMenu');// ->find('list');
@@ -49,15 +57,6 @@ class ChatworkWebhookController extends AppController
     	foreach ($menu as $item) {
     		$menuNames[$item['name']] = $item['id'];
     	}
-
-    	// シグネチャーをチェック
-    	$webhook = new Webhook(env('CHATWORK_WEBHOOK_TOKEN'), $this->request);
-    	if ( $webhook->checkSignature()) {
-    		echo "Check OK.\n";
-    	} else {
-    		echo "NG.\n";
-    		return;
-    	}
     	
     	// POST Body from Chatwork (Array not JSON)
     	$body = $this->request->getData();
@@ -65,14 +64,73 @@ class ChatworkWebhookController extends AppController
     	$account_id = $body['webhook_event']['account_id'];
     	$text = $body['webhook_event']['body'];
     	
+    	// 共通条件
     	$today = date('Y-m-d');
+    	$roomId = env('CHATWORK_ROOM_ID');
+    	
+    	// CHATWORK APIでリプ
+    	// TOKEN発行者の発言になる
+    	$api = new Api(env('CHATWORK_API_TOKEN'));
+    	
+    	// 集計のみ別
+    	if (preg_match('/^集計/', $text, $matches)) {
+    		$staffs = env('HIRA8_STAFF_IDS');
+    		$staffIds = explode(',', $staffs);
+    		$to = [];
+    		foreach ($staffIds as $id) {
+    			$to[] = "[To:" . $id . "][piconname:" . $id . "] さん";
+    		}
+    		$message  = join('、', $to) . "\n\n";
+    		$message .= $today . "の集計です(F)\n\n[hr](*)全ての注文\n";
+    		
+    		// 集計（合計）
+    		$query = $this->Orders->OrderItems->find();
+    		$query->select(['name' => 'Items.name', 'total_price' => $query->func()->sum('Items.unit_price'), 'count' => $query->func()->count('Items.id')])
+    		->contain(['Orders'])
+    		->leftJoinWith('Items')
+    		->group(['Items.id','Items.name'])
+    		->where(['Orders.order_date' => $today]); // ->enableAutoFields(true);
+    		
+    		$gt = 0;
+    		foreach ($query->all() as $item) {
+    			$message .= "　・" . $item->name . " " . $item->count . "個 小計： " . number_format($item->total_price) . "円\n";
+    			$gt += $item->total_price;
+    		}
+    		$message .= "\n　　合計： " . number_format($gt) . "円\n[hr]";
+    		
+    		// 集計（個別）
+    		$sepQuery = $query->cleanCopy();
+    		$sepQuery->select(['Orders.chatwork_account', 'name' => 'Items.name', 'total_price' => $query->func()->sum('Items.unit_price'), 'count' => $query->func()->count('Items.id')])
+    		->group(['Items.id','Items.name','Orders.chatwork_account']);
+    		
+    		// chatwork_account ごとに分ける
+    		$sepOrder = [];
+    		foreach ($sepQuery->all() as $order) {
+    			$sepOrder[$order->order->chatwork_account][] = $order;
+    		}
+    		
+    		// メッセージを整理
+    		foreach ($sepOrder as $account_id => $order) {
+    			$message .= '[to:' . $account_id. ']';
+    			$message .= "[piconname:" . $account_id. "] さんの注文\n\n";
+    			$gt = 0;
+    			foreach ($order as $item) {
+    				$message .= "　・" . $item->name . " " . $item->count . "個 小計： " . number_format($item->total_price) . "円\n";
+    				$gt += $item->total_price;
+    			}
+    			$message .= "\n　　合計： " . number_format($gt) . "円\n[hr]";
+    		}
+
+    		// メッセージポスト
+    		$api->postRoomsMessages($roomId, $message);
+    		return;
+    	}
     	
     	// TEXTを解析
     	// TODO: Controller HEAVY Refactoring! Refactoring! Refactoring!
     	// 「注文」で始まる： その後の各行を注文商品とする
     	// 「メニュー」で始まる：メニューを返す
     	// 「キャンセル」で始まる：$account_idの注文を取り消す
-    	$roomId = env('CHATWORK_ROOM_ID');
     	$message  = '';
     	$message .= '[rp aid=' . $account_id. ' to=' . $roomId. '-' . $message_id. ']'; // [rp aid={account_id} to={room_id}-{message_id}]
     	$message .= "[piconname:" . $account_id. "] さんへ\n";
@@ -129,25 +187,32 @@ class ChatworkWebhookController extends AppController
     		}
     		
     	} elseif (preg_match('/^メニュー/', $text)) {
-    		$message .= " メニューだよ。\n[code]";
+    		$message .= " メニューだよ、「注文」に続いて商品を一行づつ書いてね(cracker)\n[code]";
     		foreach ($menu as $item) {
     			$message .= "　・" . $item['name'] . " (" . $item['unit_price'] . "円)\n";
     		}
     		$message .= "[/code]";
     		
     	} elseif (preg_match('/^キャンセル/', $text)) {
-    		$message .= " キャンセルだよ。\n";
+    		// すでに注文がある場合は削除
+    		if (0 <> $query->count()) {
+    			$row = $query->first();
+    			$entity = $this->Orders->get($row->id);
+    			if ($this->Orders->delete($entity)) {
+    				$message .= " キャンセルしたよ(y)\n";
+    			} else {
+    				$message .= " キャンセルできなかった、もう一回キャンセルしてね:*\n";
+    			}
+    		} else {
+    			$message .= " 今日の注文はまだないよ(shake)\n";
+    		}
     		
     	} else {
     		// not post Messages
     		return;
     	}
     	
-    	// CHATWORK APIでリプ
-    	// TOKEN発行者の発言になる
-    	$api = new Api(env('CHATWORK_API_TOKEN'));
+    	// 集計以外のメッセージポスト
     	$api->postRoomsMessages($roomId, $message);
-    	
-    	
     }
 }
