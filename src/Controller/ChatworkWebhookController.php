@@ -111,7 +111,7 @@ class ChatworkWebhookController extends AppController
     		
     		// メッセージを整理
     		foreach ($sepOrder as $account_id => $order) {
-    			$message .= '[to:' . $account_id. ']';
+    			$message .= '[To:' . $account_id. ']';
     			$message .= "[piconname:" . $account_id. "] さんの注文\n\n";
     			$gt = 0;
     			foreach ($order as $item) {
@@ -173,7 +173,7 @@ class ChatworkWebhookController extends AppController
     			$new_order->order_items = $new_order_items;
     			$this->Orders->save($new_order);
     			
-    			$message .= " ありがとうございます、下記の通り受け付けました :) \n\n";
+    			$message .= " ありがとうございます、下記の通り受け付けました :) (" . $today . ") \n\n";
     			// クエリ
     			$newQuery= $query->cleanCopy();
     			$row = $newQuery->first();
@@ -187,9 +187,9 @@ class ChatworkWebhookController extends AppController
     		}
     		
     	} elseif (preg_match('/^メニュー/', $text)) {
-    		$message .= " メニューだよ、「注文」に続いて商品を一行づつ書いてね(cracker)\n[code]";
+    		$message .= " メニューだよ、下記をコピーして注文する商品だけ残して送信してね(cracker)\n[code]注文\n";
     		foreach ($menu as $item) {
-    			$message .= "　・" . $item['name'] . " (" . $item['unit_price'] . "円)\n";
+    			$message .= $item['name'] . "\n"; // $item['unit_price']
     		}
     		$message .= "[/code]";
     		
