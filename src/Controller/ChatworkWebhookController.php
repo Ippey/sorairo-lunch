@@ -180,14 +180,20 @@ class ChatworkWebhookController extends AppController
     			
     			$message .= " ありがとうございます、下記の通り受け付けました" . $addComment . " :) (" . $today . "分) \n\n";
     			// クエリ
-    			$newQuery= $query->cleanCopy();
-    			$row = $newQuery->first();
+    			$newQuery= $this->Orders->OrderItems->find();
+    			$newQuery->select(['Orders.chatwork_account', 'name' => 'Items.name', 'total_price' => $query->func()->sum('Items.unit_price'), 'count' => $query->func()->count('Items.id')])
+    			->contain(['Orders'])
+    			->leftJoinWith('Items')
+    			->group(['Items.id','Items.name'])
+    			->order(['Items.sort_order'])
+    			->where(['chatwork_account' => $account_id, 'order_date' => $today]);
+    			$newOrder= $newQuery->all();
     			$total = 0;
-    			foreach ($row->order_items as $item) {
-    				$message .= "　・" . $item->item->name . " (" . $item->item->unit_price. "円)\n";
-    				$total += $item->item->unit_price;
+    			foreach ($newOrder as $item) {
+     				$message .= "　・" . $item->name . " " . $item->count . "個 小計： " . number_format($item->total_price) . "円\n";
+     				$total += $item->total_price;
     			}
-    			$message .= "\n合計: " . $total. "円\n";
+    			$message .= "\n　　合計： " . number_format($total) . "円\n";
     			// $message .= "(注文番号: " . $row->id . ")\n"; // 紛らわしいので一旦廃止
     		}
     		
