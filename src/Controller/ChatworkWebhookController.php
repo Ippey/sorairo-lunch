@@ -89,6 +89,7 @@ class ChatworkWebhookController extends AppController
     		->contain(['Orders'])
     		->leftJoinWith('Items')
     		->group(['Items.id','Items.name'])
+    		->order(['Items.sort_order'])
     		->where(['Orders.order_date' => $today]); // ->enableAutoFields(true);
     		
     		$gt = 0;
@@ -159,21 +160,25 @@ class ChatworkWebhookController extends AppController
     		if (0 == count($new_order_items)) {
     			$message .= "(sweat) 商品が見つかりません。 (sweat)";
     		} else {
-    			// すでに注文がある場合は削除＆登録
+    			// すでに注文がある場合は既存注文に追加
+    			$addComment = "（新規）";
     			if (0 <> $query->count()) {
     				$row = $query->first();
-    				$entity = $this->Orders->get($row->id);
-    				$result = $this->Orders->delete($entity);
+    				// 既存注文を選ぶ
+    				$new_order= $this->Orders->get($row->id);
+    				$addComment = "（更新）";
+    			} else {
+    				// 新規注文を生成
+    				$new_order = $this->Orders->newEntity();
+    				$new_order->chatwork_account = $account_id;
+    				$new_order->order_date= $today;
     			}
     			
-    			// 登録
-    			$new_order = $this->Orders->newEntity();
-    			$new_order->chatwork_account = $account_id;
-    			$new_order->order_date= $today;
+    			// 商品を登録
     			$new_order->order_items = $new_order_items;
     			$this->Orders->save($new_order);
     			
-    			$message .= " ありがとうございます、下記の通り受け付けました :) (" . $today . ") \n\n";
+    			$message .= " ありがとうございます、下記の通り受け付けました" . $addComment . " :) (" . $today . "分) \n\n";
     			// クエリ
     			$newQuery= $query->cleanCopy();
     			$row = $newQuery->first();
@@ -183,7 +188,7 @@ class ChatworkWebhookController extends AppController
     				$total += $item->item->unit_price;
     			}
     			$message .= "\n合計: " . $total. "円\n";
-    			$message .= "(注文番号: " . $row->id . ")\n";
+    			// $message .= "(注文番号: " . $row->id . ")\n"; // 紛らわしいので一旦廃止
     		}
     		
     	} elseif (preg_match('/^メニュー/', $text)) {
