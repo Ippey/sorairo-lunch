@@ -178,7 +178,7 @@ class ChatworkWebhookController extends AppController
     			$new_order->order_items = $new_order_items;
     			$this->Orders->save($new_order);
     			
-    			$message .= " ありがとうございます、下記の通り受け付けました" . $addComment . " :) (" . $today . "分) \n\n";
+    			$message .= " 注文受けたで。昼ごはんまでもう少し、頑張るんやで。" . $addComment . " :) (" . $today . "分) \n\n";
     			// クエリ
     			$newQuery= $this->Orders->OrderItems->find();
     			$newQuery->select(['Orders.chatwork_account', 'name' => 'Items.name', 'total_price' => $query->func()->sum('Items.unit_price'), 'count' => $query->func()->count('Items.id')])
