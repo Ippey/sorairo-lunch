@@ -5,12 +5,15 @@ use App\ChatWork\Webhook;
 use App\ChatWork\Api;
 use Cake\ORM\TableRegistry;
 use Psr\Log\LogLevel;
+use Composer\Config;
+use Cake\Core\Configure;
 
 /**
  * ChatworkWebhook Controller
  *
  * @property \App\Model\Table\ItemsTable $Items
  * @property \App\Model\Table\OrdersTable $Orders
+ * @property Array $openDate 営業日カレンダー
  *
  * @method \App\Model\Entity\Item[] paginate($object = null, array $settings = [])
  */
@@ -29,6 +32,8 @@ class ChatworkWebhookController extends AppController
 		
 		$this->Items = TableRegistry::get('Items');
 		$this->Orders= TableRegistry::get('Orders');
+		
+		$this->openDate = Configure::read('openDate');
 	}
 	
     /**
@@ -47,6 +52,16 @@ class ChatworkWebhookController extends AppController
     		return;
     	}
     	
+    	// 共通条件
+    	$today = date('Y-m-d');
+    	$roomId = env('CHATWORK_ROOM_ID');
+    	
+    	// 営業日チェック
+    	$isOpen = false;
+    	if (key_exists($today, $this->openDate) && 1 == $this->openDate[$today]) {
+    	    $isOpen = true;
+    	}
+    	
     	// メニューを取得
     	$query = $this->Items->find('ActiveMenu');// ->find('list');
     	$query->enableHydration(false); // 結果をArrayで
@@ -63,10 +78,6 @@ class ChatworkWebhookController extends AppController
      	$message_id = $body['webhook_event']['message_id'];
     	$account_id = $body['webhook_event']['account_id'];
     	$text = $body['webhook_event']['body'];
-    	
-    	// 共通条件
-    	$today = date('Y-m-d');
-    	$roomId = env('CHATWORK_ROOM_ID');
     	
     	// CHATWORK APIでリプ
     	// TOKEN発行者の発言になる
@@ -157,7 +168,9 @@ class ChatworkWebhookController extends AppController
     				$new_order_items[] = $entity;
     			}
     		}
-    		if (0 == count($new_order_items)) {
+    		if (false == $isOpen) {
+    		    $message .= "注文してくれてわるいんやけど、今日は休みやで、またきてなぁ〜(dance)";
+    		} elseif (0 == count($new_order_items)) {
     			$message .= "(sweat) 商品が見つかりません。 (sweat)";
     		} else {
     			// すでに注文がある場合は既存注文に追加
@@ -178,7 +191,7 @@ class ChatworkWebhookController extends AppController
     			$new_order->order_items = $new_order_items;
     			$this->Orders->save($new_order);
     			
-    			$message .= " 注文受けたで。昼ごはんまでもう少し、頑張るんやで。" . $addComment . " :) (" . $today . "分) \n\n";
+    			$message .= "注文受けたで。昼ごはんまでもう少し、頑張るんやで。" . $addComment . " :) (" . $today . "分) \n\n";
     			// クエリ
     			$newQuery= $this->Orders->OrderItems->find();
     			$newQuery->select(['Orders.chatwork_account', 'name' => 'Items.name', 'total_price' => $query->func()->sum('Items.unit_price'), 'count' => $query->func()->count('Items.id')])
@@ -198,7 +211,12 @@ class ChatworkWebhookController extends AppController
     		}
     		
     	} elseif (preg_match('/^メニュー/', $text)) {
-    		$message .= " メニューだよ、下記をコピーして注文する商品だけ残して送信してね(cracker)\n[code]注文\n";
+    	    if ($isOpen) {
+    	        $message .= " メニューだよ、下記をコピーして注文する商品だけ残して送信してね(cracker)\n[code]注文\n";
+    	    } else {
+    	        $message .= "わるいんやけど、今日は休みやで、メニューだけ教えたるわ8-)\n[code]注文\n";
+    	    }
+    		
     		foreach ($menu as $item) {
     			$message .= $item['name'] . "\n"; // $item['unit_price']
     		}

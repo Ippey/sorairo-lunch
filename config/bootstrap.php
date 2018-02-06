@@ -69,6 +69,7 @@ if (!env('APP_NAME') && file_exists(CONFIG . '.env')) {
 try {
     Configure::config('default', new PhpConfig());
     Configure::load('app', 'default', false);
+    Configure::load('openDate', 'default', false);
 } catch (\Exception $e) {
     exit($e->getMessage() . "\n");
 }
